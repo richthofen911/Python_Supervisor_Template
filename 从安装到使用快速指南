@@ -1,0 +1,84 @@
+0. sudo pip install supervisor
+1. echo_supervisord_conf > /etc/supervisord.conf  
+    如果出现没有权限的问题，可以使用这条命令 sudo su - root -c "echo_supervisord_conf > /etc/supervisord.conf"
+2. 配置文件
+   vim /etc/supervisord.conf 默认已经有很多了，注意有坑
+    supervisord.pid 以及 supervisor.sock 是放在 /tmp 目录下，但是 /tmp 目录是存放临时文件，里面的文件是会被 
+    Linux 系统删除的，一旦这些文件丢失，就无法再通过 supervisorctl 来执行 restart 和 stop 命令了，
+    将只会得到 unix:///tmp/supervisor.sock 不存在的错误 。 须改动地方见结尾
+3. 设置好配置文件后，应先创建上述配置文件中新增的文件夹。如果指定了启动用户 user，这里以 oxygen 为例，
+    那么应注意相关文件的权限问题，包括日志文件，否则会出现没有权限的错误。例如设置了启动用户 oxygen，
+    然后启动 supervisord 出现错误
+    Error: Cannot open an HTTP server: socket.error reported errno.EACCES (13)
+    就是由于上面的配置文件中 /var/run 文件夹，没有授予启动 supervisord 的用户 oxygen 的写权限。
+    /var/run 文件夹实际上是链接到 /run，因此我们修改 /run 的权限。
+    sudo chmod 777 /run
+    一般情况下，我们可以用 root 用户启动 supervisord 进程，然后在其所管理的进程中，再具体指定需要以那个用户启动这些进程。  
+    supervisor 同时提供了通过浏览器来管理进程的方法，只需要取消如下几行的默认注释就可以了。
+    ;[inet_http_server]         ; inet (TCP) server disabled by default
+    ;port=127.0.0.1:9001        ; (ip_address:port specifier, *:port for ;all iface)
+    ;username=user              ; (default is no username (open server))
+    ;password=123               ; (default is no password (open server))
+    
+    [supervisorctl]
+    ...
+    ;serverurl=http://127.0.0.1:9001 ; use an http:// url to specify an inet socket
+    ;username=chris              ; should be same as http_username if set
+    ;password=123                ; should be same as http_password if set
+
+4.  进程的配置样例
+      [program:your_program_name]   // your_program_name随便是什么都可以，supervisorstl start program_name时候用
+      command=python server.py 8888           // 8888是port，可以没有
+      ;numprocs=1                 // 默认为1
+      ;process_name=%(program_name)s   // 默认为 %(program_name)s，即 [program:x] 中的 x
+      directory=/home/python/tornado_server ; 执行 command 之前，先切换到工作目录
+      user=oxygen                 ; 使用 oxygen 用户来启动该进程
+      ; 程序崩溃时自动重启，重启次数是有限制的，默认为3次
+      autorestart=true            
+      redirect_stderr=true        ; 重定向输出的日志
+      stdout_logfile = /var/log/supervisord/tornado_server.log // 这个文件要事先创建
+      loglevel=info
+
+    
+    
+---------------------配置文件 默认值需要改动的地方------------------------------
+
+[unix_http_server]
+;file=/tmp/supervisor.sock   ; (the path to the socket file)
+;修改为 /var/run 目录，避免被系统删除
+file=/var/run/supervisor.sock   ; (the path to the socket file)
+;chmod=0700                 ; socket file mode (default 0700)
+;chown=nobody:nogroup       ; socket file uid:gid owner
+;username=user              ; (default is no username (open server))
+;password=123               ; (default is no password (open server))
+
+;[inet_http_server]         ; inet (TCP) server disabled by default
+;port=127.0.0.1:9001        ; (ip_address:port specifier, *:port for ;all iface)
+;username=user              ; (default is no username (open server))
+;password=123               ; (default is no password (open server))
+...
+
+[supervisord]
+;logfile=/tmp/supervisord.log ; (main log file;default $CWD/supervisord.log)
+;修改为 /var/log 目录，避免被系统删除
+logfile=/var/log/supervisor/supervisord.log ; (main log file;default $CWD/supervisord.log)
+logfile_maxbytes=50MB        ; (max main logfile bytes b4 rotation;default 50MB)
+logfile_backups=10           ; (num of main logfile rotation backups;default 10)
+loglevel=info                ; (log level;default info; others: debug,warn,trace)
+;pidfile=/tmp/supervisord.pid ; (supervisord pidfile;default supervisord.pid)
+;修改为 /var/run 目录，避免被系统删除
+pidfile=/var/run/supervisord.pid ; (supervisord pidfile;default supervisord.pid)
+...
+;设置启动supervisord的用户，一般情况下不要轻易用root用户来启动，除非你真的确定要这么做
+;user=chrism                 ; (default is current user, required if root)
+...
+
+[supervisorctl]
+; 必须和'unix_http_server'里面的设定匹配
+;serverurl=unix:///tmp/supervisor.sock ; use a unix:// URL  for a unix socket
+;修改为 /var/run 目录，避免被系统删除
+serverurl=unix:///var/run/supervisor.sock ; use a unix:// URL  for a unix socket
+;serverurl=http://127.0.0.1:9001 ; use an http:// url to specify an inet socket
+;username=chris              ; should be same as http_username if set
+;password=123                ; should be same as http_password if set
+...    
