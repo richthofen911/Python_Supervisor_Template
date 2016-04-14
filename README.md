@@ -1,5 +1,7 @@
 # Python_Supervisor_Template<br />
 
+http://www.restran.net/2015/10/04/supervisord-tutorial/
+
 url_reference: https://serversforhackers.com/monitoring-processes-with-supervisord<br />
 url_offical: http://supervisord.org/configuration.html<br /><br />
 
